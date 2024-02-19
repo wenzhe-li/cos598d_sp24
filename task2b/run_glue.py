@@ -146,21 +146,8 @@ def train(args, train_dataset, model, tokenizer):
             
             # Gather gradients to rank 0 and then scatter the average gradient to all ranks
             for param in model.parameters():
-                gathered_gradients = [torch.zeros_like(param.data) for _ in range(args.world_size)]
-                torch.distributed.gather(param.grad, gather_list=gathered_gradients if args.local_rank == 0 else None, dst=0)
-
-                torch.distributed.barrier()
-
-                if args.local_rank == 0:
-                    mean_gradient = torch.mean(torch.stack(gathered_gradients), dim=0)
-                else:
-                    mean_gradient = torch.zeros_like(param.grad)
-                scatter_list = [mean_gradient for _ in range(args.world_size)] if args.local_rank == 0 else None
-                torch.distributed.scatter(mean_gradient, scatter_list=scatter_list, src=0)
-
-                torch.distributed.barrier()
-
-                param.grad = mean_gradient
+                torch.distributed.all_reduce(param.grad, op=torch.distributed.ReduceOp.SUM)
+                param.grad = param.grad / args.world_size
             
             torch.distributed.barrier()
 

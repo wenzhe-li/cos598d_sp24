@@ -1,7 +1,7 @@
 export GLUE_DIR=$HOME/glue_data
 export TASK_NAME=RTE
 
-CUDA_VISIBLE_DEVICES=5 python3 run_glue.py \
+CUDA_VISIBLE_DEVICES=7 python3 run_glue.py \
   --model_type bert \
   --model_name_or_path bert-base-cased \
   --task_name $TASK_NAME \
@@ -14,7 +14,7 @@ CUDA_VISIBLE_DEVICES=5 python3 run_glue.py \
   --num_train_epochs 3 \
   --output_dir ./$TASK_NAME/ \
   --overwrite_output_dir \
-  --local_rank 1 \
+  --local_rank 3 \
   --master_ip localhost \
   --master_port 6585 \
   --world_size 4

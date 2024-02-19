@@ -28,6 +28,7 @@ import torch
 from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler,
                               TensorDataset)
 from torch.utils.data.distributed import DistributedSampler
+from torch.nn.parallel import DistributedDataParallel as DDP
 from tqdm import tqdm, trange
 
 # import a previous version of the HuggingFace Transformers package
@@ -142,28 +143,6 @@ def train(args, train_dataset, model, tokenizer):
             with open(f'loss_{args.local_rank}.txt', 'a') as f:
                 f.write(f'step: {step}, loss: {loss.item()}\n')
             
-            torch.distributed.barrier()
-            
-            # Gather gradients to rank 0 and then scatter the average gradient to all ranks
-            for param in model.parameters():
-                gathered_gradients = [torch.zeros_like(param.data) for _ in range(args.world_size)]
-                torch.distributed.gather(param.grad, gather_list=gathered_gradients if args.local_rank == 0 else None, dst=0)
-
-                torch.distributed.barrier()
-
-                if args.local_rank == 0:
-                    mean_gradient = torch.mean(torch.stack(gathered_gradients), dim=0)
-                else:
-                    mean_gradient = torch.zeros_like(param.grad)
-                scatter_list = [mean_gradient for _ in range(args.world_size)] if args.local_rank == 0 else None
-                torch.distributed.scatter(mean_gradient, scatter_list=scatter_list, src=0)
-
-                torch.distributed.barrier()
-
-                param.grad = mean_gradient
-            
-            torch.distributed.barrier()
-
             tr_loss += loss.item()
             if (step + 1) % args.gradient_accumulation_steps == 0:
                 scheduler.step()  # Update learning rate schedule
@@ -430,6 +409,8 @@ def main():
         torch.distributed.barrier()  # Make sure only the first process in distributed training will download model & vocab
 
     model.to(args.device)
+    if args.local_rank != -1:
+        model = DDP(model, device_ids=[0], output_device=0)
 
     logger.info("Training/evaluation parameters %s", args)
 
