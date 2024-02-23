@@ -29,6 +29,7 @@ from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler,
                               TensorDataset)
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
+from codetiming import Timer
 
 # import a previous version of the HuggingFace Transformers package
 from pytorch_transformers import (WEIGHTS_NAME, BertConfig,
@@ -116,6 +117,10 @@ def train(args, train_dataset, model, tokenizer):
     for _ in train_iterator:
         epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])
         for step, batch in enumerate(epoch_iterator):
+            if args.timing and args.local_rank == 0 and step == 1:
+                timer = Timer()
+                timer.start()
+            
             model.train()
             batch = tuple(t.to(args.device) for t in batch)
             inputs = {'input_ids':      batch[0],
@@ -177,6 +182,10 @@ def train(args, train_dataset, model, tokenizer):
             if args.max_steps > 0 and global_step > args.max_steps:
                 epoch_iterator.close()
                 break
+        if args.timing and args.local_rank == 0:
+            timer.stop()
+            with open(f'time_{args.local_rank}.txt', 'a') as f:
+                f.write(f'average time per step: {timer.last / (len(epoch_iterator) - 1)}\n')
         if args.max_steps > 0 and global_step > args.max_steps:
             train_iterator.close()
             break
@@ -379,6 +388,7 @@ def main():
     parser.add_argument('--master_ip', type=str, default='', help="")
     parser.add_argument('--master_port', type=str, default='', help="")
     parser.add_argument('--world_size', type=int, default=1, help="")
+    parser.add_argument('--timing', action='store_true', help="Time the training process")
     args = parser.parse_args()
 
     # torch.distributed.init_process_group(backend="gloo", init_method="tcp://{}:{}".format(args.master_ip, args.master_port), world_size=args.world_size, rank=args.local_rank)
