@@ -1,0 +1,3 @@
+average time per step: 0.8360249079690364
+average time per step: 0.8033312940479893
+average time per step: 0.6703069933175453
